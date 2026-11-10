@@ -9,7 +9,7 @@
  * No new npm deps — uses Node built-in `crypto`.
  */
 
-import { createHmac, timingSafeEqual } from 'crypto'
+import { createHmac, randomBytes, timingSafeEqual } from 'crypto'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -93,29 +93,49 @@ export function verifyToken(token: string, secret: string): TokenPayload | null 
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
+function isUserEntry(value: unknown): value is UserEntry {
+  const v = value as Partial<UserEntry> | null
+  return !!v && typeof v.u === 'string' && v.u !== '' && typeof v.p === 'string' && v.p !== ''
+    && typeof v.role === 'string' && v.role !== ''
+}
+
+function parseUsers(raw: string): UserEntry[] | null {
+  try {
+    const users: unknown = JSON.parse(raw)
+    return Array.isArray(users) && users.length > 0 && users.every(isUserEntry) ? users : null
+  } catch {
+    return null
+  }
+}
+
+/** A secret nobody knows, so no token verifies against it. Made once per process. */
+const LOCKED_SECRET = randomBytes(32).toString('hex')
+let warnedLocked = false
+
 /**
  * Read auth configuration from environment variables.
- * enabled = true only when both AUTH_SECRET is a non-empty string AND
- * AUTH_USERS parses to a non-empty array.
- * Never throws — returns { enabled:false } on any parse error.
+ * - Neither AUTH_SECRET nor AUTH_USERS set: auth is off and saving is open (a deliberate no-login setup).
+ * - Both set and valid: auth is on.
+ * - Anything else (one missing, bad JSON, a user without u/p/role): auth is ON with no users,
+ *   so nobody can log in and every save is refused. A typo must never open saving to everyone.
+ * Never throws.
  */
 export function authConfig(): AuthConfig {
   const secret = process.env['AUTH_SECRET'] ?? ''
   const rawUsers = process.env['AUTH_USERS'] ?? ''
 
-  if (!secret || !rawUsers) {
+  if (!secret && !rawUsers) {
     return { enabled: false, secret: '', users: [] }
   }
 
-  try {
-    const users = JSON.parse(rawUsers) as UserEntry[]
-    if (!Array.isArray(users) || users.length === 0) {
-      return { enabled: false, secret: '', users: [] }
-    }
-    return { enabled: true, secret, users }
-  } catch {
-    return { enabled: false, secret: '', users: [] }
+  const users = secret ? parseUsers(rawUsers) : null
+  if (users) return { enabled: true, secret, users }
+
+  if (!warnedLocked) {
+    warnedLocked = true
+    console.error('[auth] AUTH_SECRET / AUTH_USERS incomplete or invalid — saving is locked until they are fixed')
   }
+  return { enabled: true, secret: LOCKED_SECRET, users: [] }
 }
 
 // ─── Login check ──────────────────────────────────────────────────────────────
