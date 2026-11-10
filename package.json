@@ -3,11 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "description": "การตั้งค่าเพื่อส่งออก NDP — ตั้งรหัสรายการ รพ. ให้ตรงเกณฑ์กิจกรรม PP 104 รายการ (NHSO Digital Platform)",
-  "workspaces": ["backend", "frontend"],
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace=backend\" \"npm run dev --workspace=frontend\"",
     "build": "npm run build --workspace=backend && npm run build --workspace=frontend",
-    "test": "npm run test --workspace=backend && npm run test --workspace=frontend"
+    "test": "npm run test --workspace=backend && npm run test --workspace=frontend",
+    "start": "npm run start --workspace=backend"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
